@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.Components.RenderTree;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Microsoft.AspNetCore.Components
 {
@@ -49,13 +51,13 @@ namespace Microsoft.AspNetCore.Components
         bool ICascadingValueComponent.CurrentValueIsFixed => IsFixed;
 
         /// <inheritdoc />
-        public void Init(RenderHandle renderHandle)
+        public void Configure(RenderHandle renderHandle)
         {
             _renderHandle = renderHandle;
         }
 
         /// <inheritdoc />
-        public void SetParameters(ParameterCollection parameters)
+        public async Task SetParametersAsync(ParameterCollection parameters)
         {
             // Implementing the parameter binding manually, instead of just calling
             // parameters.SetParameterProperties(this), is just a very slight perf optimization
@@ -127,7 +129,7 @@ namespace Microsoft.AspNetCore.Components
 
             if (_subscribers != null && ChangeDetection.MayHaveChanged(previousValue, Value))
             {
-                NotifySubscribers();
+                await NotifySubscribersAsync();
             }
         }
 
@@ -166,12 +168,9 @@ namespace Microsoft.AspNetCore.Components
             _subscribers.Remove(subscriber);
         }
 
-        private void NotifySubscribers()
+        private async Task NotifySubscribersAsync()
         {
-            foreach (var subscriber in _subscribers)
-            {
-                subscriber.NotifyCascadingValueChanged();
-            }
+            await Task.WhenAll(_subscribers.Select(s => s.NotifyCascadingValueChanged()));
         }
 
         private void Render(RenderTreeBuilder builder)

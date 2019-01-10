@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Components.Test.Helpers;
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Microsoft.AspNetCore.Components.Test
@@ -315,7 +316,10 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             isFixed = true;
-            var ex = Assert.Throws<InvalidOperationException>(() => component.TriggerRender());
+            var ex = Assert.Throws<InvalidOperationException>(() =>
+            {
+                component.TriggerRender();
+            });
             Assert.Equal("The value of IsFixed cannot be changed dynamically.", ex.Message);
         }
 
@@ -340,7 +344,10 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             isFixed = false;
-            var ex = Assert.Throws<InvalidOperationException>(() => component.TriggerRender());
+            var ex = Assert.Throws<InvalidOperationException>(() =>
+            {
+                component.TriggerRender();
+            });
             Assert.Equal("The value of IsFixed cannot be changed dynamically.", ex.Message);
         }
 
@@ -374,10 +381,10 @@ namespace Microsoft.AspNetCore.Components.Test
             [CascadingParameter] T CascadingParameter { get; set; }
             [Parameter] string RegularParameter { get; set; }
 
-            public override void SetParameters(ParameterCollection parameters)
+            public override async Task SetParametersAsync(ParameterCollection parameters)
             {
                 NumSetParametersCalls++;
-                base.SetParameters(parameters);
+                await base.SetParametersAsync(parameters);
             }
 
             protected override void BuildRenderTree(RenderTreeBuilder builder)

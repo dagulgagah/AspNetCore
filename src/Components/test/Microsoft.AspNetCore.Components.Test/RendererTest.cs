@@ -2,7 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components.Rendering;
@@ -159,6 +161,139 @@ namespace Microsoft.AspNetCore.Components.Test
                     Assert.Equal(0, edit.ReferenceFrameIndex);
                     AssertFrame.Text(secondBatch.ReferenceFrames[0], "Render 2");
                 });
+        }
+
+        [Fact]
+        public async Task CanRenderAsyncTopLevelComponents()
+        {
+            // Arrange
+            var renderer = new TestRenderer();
+            var component = new AsyncComponent(5); // Triggers n renders, the first one creating <p>n</p> and the n-1 renders asynchronously update the value.
+
+            // Act
+            var componentId = renderer.AssignRootComponentId(component);
+            await renderer.RenderRootComponentAsync(componentId);
+
+            // Assert
+            Assert.Equal(5, renderer.Batches.Count);
+
+            // First render
+            var create = renderer.Batches[0];
+            var diff = create.DiffsByComponentId[componentId].Single();
+            Assert.Collection(diff.Edits,
+                edit =>
+                {
+                    Assert.Equal(RenderTreeEditType.PrependFrame, edit.Type);
+                    Assert.Equal(0, edit.ReferenceFrameIndex);
+                });
+            AssertFrame.Element(create.ReferenceFrames[0], "p", 2);
+            AssertFrame.Text(create.ReferenceFrames[1], "5");
+
+            // Second render
+            for (int i = 1; i < 5; i++)
+            {
+
+                var update = renderer.Batches[i];
+                var updateDiff = update.DiffsByComponentId[componentId].Single();
+                Assert.Collection(updateDiff.Edits,
+                    edit =>
+                    {
+                        Assert.Equal(RenderTreeEditType.StepIn, edit.Type);
+                    },
+                    edit =>
+                    {
+                        Assert.Equal(RenderTreeEditType.UpdateText, edit.Type);
+                    },
+                    edit =>
+                    {
+                        Assert.Equal(RenderTreeEditType.StepOut, edit.Type);
+                    });
+                AssertFrame.Text(update.ReferenceFrames[0], (5 - i).ToString());
+            }
+        }
+
+        [Fact]
+        public async Task CanRenderAsyncNestedComponents()
+        {
+            // Arrange
+            var renderer = new TestRenderer();
+            var component = new TestNestedAsyncComponent();
+
+            // Act/Assert
+            var componentId = renderer.AssignRootComponentId(component);
+            await renderer.RenderRootComponentAsync(componentId, ParameterCollection.FromDictionary(new Dictionary<string, object>
+            {
+                [nameof(TestNestedAsyncComponent.EventActions)] = new Dictionary<int, IList<ExecutionAction>>
+                {
+                    [0] = new List<ExecutionAction>
+                    {
+                        ExecutionAction.On(0, EventType.OnInit),
+                        ExecutionAction.On(0, EventType.OnInitAsyncAsync, async:true),
+                        ExecutionAction.On(0, EventType.OnParametersSet),
+                        ExecutionAction.On(0, EventType.OnParametersSetAsyncAsync, async: true),
+                    },
+                    [1] = new List<ExecutionAction>
+                    {
+                        ExecutionAction.On(1, EventType.OnInit),
+                        ExecutionAction.On(1, EventType.OnInitAsyncAsync, async:true),
+                        ExecutionAction.On(1, EventType.OnParametersSet),
+                        ExecutionAction.On(1, EventType.OnParametersSetAsyncAsync, async: true),
+                    }
+                },
+                [nameof(TestNestedAsyncComponent.WhatToRender)] = new Dictionary<int, Func<TestNestedAsyncComponent, RenderFragment>>
+                {
+                    [0] = CreateRenderFactory(new[] { 1 }),
+                    [1] = CreateRenderFactory(Array.Empty<int>())
+                },
+                [nameof(TestNestedAsyncComponent.Counter)] = 10
+            }));
+            var log = TestNestedAsyncComponent.GetLog();
+            var logForParent = log.Where(l => l.id == 0).ToArray();
+            var logForChild = log.Where(l => l.id == 1).ToArray();
+
+            // Init runs first
+            Assert.Equal((0, EventType.OnInit), logForParent[0]);
+            Assert.Equal((0, EventType.OnInitAsyncAsync), logForParent[1]);            
+            Assert.Equal((1, EventType.OnInit), logForChild[0]);
+            Assert.Equal((1, EventType.OnInitAsyncAsync), logForChild[1]);
+
+            for (var i = 2; i < logForParent.Length - 1; i=i+2)
+            {
+                Assert.Equal((0, EventType.OnParametersSet), logForParent[i]);
+                Assert.Equal((0, EventType.OnParametersSetAsyncAsync), logForParent[i + 1]);
+            }
+
+            for (var i = 2; i < logForChild.Length-1; i=i+2)
+            {
+                Assert.Equal((1, EventType.OnParametersSet), logForChild[i]);
+                Assert.Equal((1, EventType.OnParametersSetAsyncAsync), logForChild[i+1]);
+            }
+        }
+
+        private Func<TestNestedAsyncComponent, RenderFragment> CreateRenderFactory(int[] childrenToRender)
+        {
+            var eventActionsName = nameof(TestNestedAsyncComponent.EventActions);
+            var whatToRenderName = nameof(TestNestedAsyncComponent.WhatToRender);
+            var testIdName = nameof(TestNestedAsyncComponent.TestId);
+            var counterName = nameof(TestNestedAsyncComponent.Counter);
+
+            return component => builder =>
+            {
+                int s = 0;
+                builder.OpenElement(s++, "div");
+                builder.AddContent(s++, $"Id: {component.TestId} BuildRenderTree, Counter: {component.Counter}");
+                foreach (var child in childrenToRender)
+                {
+                    builder.OpenComponent<TestNestedAsyncComponent>(s++);
+                    builder.AddAttribute(s++, eventActionsName, component.EventActions);
+                    builder.AddAttribute(s++, whatToRenderName, component.WhatToRender);
+                    builder.AddAttribute(s++, testIdName, child);
+                    builder.AddAttribute(s++, counterName, component.Counter);
+                    builder.CloseComponent();
+                }
+
+                builder.CloseElement();
+            };
         }
 
         [Fact]
@@ -1233,13 +1368,16 @@ namespace Microsoft.AspNetCore.Components.Test
                 _renderFragment = renderFragment;
             }
 
-            public void Init(RenderHandle renderHandle)
+            public void Configure(RenderHandle renderHandle)
             {
                 _renderHandle = renderHandle;
             }
 
-            public void SetParameters(ParameterCollection parameters)
-                => TriggerRender();
+            public Task SetParametersAsync(ParameterCollection parameters)
+            {
+                TriggerRender();
+                return Task.CompletedTask;
+            }
 
             public void TriggerRender()
                 => _renderHandle.Render(_renderFragment);
@@ -1247,6 +1385,192 @@ namespace Microsoft.AspNetCore.Components.Test
             public bool Disposed { get; private set; }
 
             void IDisposable.Dispose() => Disposed = true;
+        }
+
+        private class AsyncComponent : IComponent
+        {
+            private RenderHandle _renderHandler;
+
+            public AsyncComponent(int number)
+            {
+                Number = number;
+            }
+
+            public int Number { get; set; }
+
+            public void Configure(RenderHandle renderHandle)
+            {
+                _renderHandler = renderHandle;
+            }
+
+            public async Task SetParametersAsync(ParameterCollection parameters)
+            {
+                int n;
+                while (Number > 0)
+                {
+                    n = Number;
+                    _renderHandler.Render(CreateFragment);
+                    Number--;
+                    await Task.Yield();
+                };
+
+                // Cheap closure
+                void CreateFragment(RenderTreeBuilder builder)
+                {
+                    var s = 0;
+                    builder.OpenElement(s++, "p");
+                    builder.AddContent(s++, n);
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        private class TestNestedAsyncComponent : ComponentBase
+        {
+            private RenderHandle _renderHandle;
+            private static readonly Queue<(int testId, EventType @event)> _log =
+                new Queue<(int testId, EventType @event)>();
+
+            public void Configure(RenderHandle renderHandle)
+            {
+                _renderHandle = renderHandle;
+            }
+
+            [Parameter] public IDictionary<int, IList<ExecutionAction>> EventActions { get; set; }
+
+            [Parameter] public IDictionary<int, Func<TestNestedAsyncComponent, RenderFragment>> WhatToRender { get; set; }
+
+            [Parameter] public int TestId { get; set; }
+
+            [Parameter] public int Counter { get; set; } = 10;
+
+            protected override void OnInit()
+            {
+                DecrementPositiveCounter();
+                if (TryGetEntry(EventType.OnInit, out var entry))
+                {
+                    var result = entry.EventAction();
+                    LogResult(result.Result);
+                }
+                base.OnInit();
+            }
+
+            private void DecrementPositiveCounter()
+            {
+                if (Counter > 0)
+                {
+                    Counter--;
+                }
+            }
+
+            protected override async Task OnInitAsync()
+            {
+                DecrementPositiveCounter();
+                if (TryGetEntry(EventType.OnInitAsyncSync, out var entrySync))
+                {
+                    var result = await entrySync.EventAction();
+                    LogResult(result);
+                }
+                else if (TryGetEntry(EventType.OnInitAsyncAsync, out var entryAsync))
+                {
+                    var result = await entryAsync.EventAction();
+                    LogResult(result);
+                }
+                DecrementPositiveCounter();
+                await base.OnInitAsync();
+            }
+
+            protected override void OnParametersSet()
+            {
+                DecrementPositiveCounter();
+                if (TryGetEntry(EventType.OnParametersSet, out var entry))
+                {
+                    var result = entry.EventAction();
+                    LogResult(result.Result);
+                }
+                base.OnParametersSet();
+            }
+
+            protected override async Task OnParametersSetAsync()
+            {
+                DecrementPositiveCounter();
+                if (TryGetEntry(EventType.OnParametersSetAsyncSync, out var entrySync))
+                {
+                    var result = await entrySync.EventAction();
+                    LogResult(result);
+                }
+                else if (TryGetEntry(EventType.OnParametersSetAsyncAsync, out var entryAsync))
+                {
+                    var result = await entryAsync.EventAction();
+                    LogResult(result);
+                }
+                DecrementPositiveCounter();
+            }
+
+            protected override void BuildRenderTree(RenderTreeBuilder builder)
+            {
+                base.BuildRenderTree(builder);
+                var renderFactory = WhatToRender[TestId];
+                renderFactory(this)(builder);
+            }
+
+            private bool TryGetEntry(EventType eventType, out ExecutionAction entry)
+            {
+                var entries = EventActions[TestId];
+                if (entries == null)
+                {
+                    throw new InvalidOperationException("Failed to find entries for component with Id: " + TestId);
+                }
+                entry = entries.FirstOrDefault(e => e.Event == eventType);
+                return entry != null;
+            }
+
+            private void LogResult((int, EventType) entry)
+            {
+                _log.Enqueue(entry);
+            }
+
+            public static IList<(int id, EventType @event)> GetLog() => _log.ToArray();
+        }
+
+        private class ExecutionAction
+        {
+            public EventType Event { get; set; }
+            public Func<Task<(int id, EventType @event)>> EventAction { get; set; }
+
+            public static ExecutionAction On(int id, EventType @event, bool async = false)
+            {
+                if (!async)
+                {
+                    return new ExecutionAction
+                    {
+                        Event = @event,
+                        EventAction = () => Task.FromResult((id, @event))
+                    };
+                }
+                else
+                {
+                    return new ExecutionAction
+                    {
+                        Event = @event,
+                        EventAction = async () =>
+                        {
+                            await Task.Yield();
+                            return (id, @event);
+                        }
+                    };
+                }
+            }
+        }
+
+        private enum EventType
+        {
+            OnInit,
+            OnInitAsyncSync,
+            OnInitAsyncAsync,
+            OnParametersSet,
+            OnParametersSetAsyncSync,
+            OnParametersSetAsyncAsync
         }
 
         private class MessageComponent : AutoRenderComponent
@@ -1273,11 +1597,14 @@ namespace Microsoft.AspNetCore.Components.Test
 
             public RenderHandle RenderHandle { get; private set; }
 
-            public void Init(RenderHandle renderHandle)
+            public void Configure(RenderHandle renderHandle)
                 => RenderHandle = renderHandle;
 
-            public void SetParameters(ParameterCollection parameters)
-                => parameters.SetParameterProperties(this);
+            public Task SetParametersAsync(ParameterCollection parameters)
+            {
+                parameters.SetParameterProperties(this);
+                return Task.CompletedTask;
+            }
         }
 
         private class EventComponent : AutoRenderComponent, IComponent, IHandleEvent
@@ -1337,7 +1664,7 @@ namespace Microsoft.AspNetCore.Components.Test
             protected override void BuildRenderTree(RenderTreeBuilder builder)
             {
                 builder.AddContent(0, "Parent here");
-                
+
                 if (IncludeChild)
                 {
                     builder.OpenComponent<T>(1);
@@ -1353,7 +1680,7 @@ namespace Microsoft.AspNetCore.Components.Test
                 }
             }
         }
-        
+
         private class ReRendersParentComponent : AutoRenderComponent
         {
             [Parameter]
@@ -1380,13 +1707,14 @@ namespace Microsoft.AspNetCore.Components.Test
 
             private RenderHandle _renderHandle;
 
-            public void Init(RenderHandle renderHandle)
+            public void Configure(RenderHandle renderHandle)
                 => _renderHandle = renderHandle;
 
-            public void SetParameters(ParameterCollection parameters)
+            public Task SetParametersAsync(ParameterCollection parameters)
             {
                 parameters.SetParameterProperties(this);
                 Render();
+                return Task.CompletedTask;
             }
 
             public void HandleEvent(EventHandlerInvoker binding, UIEventArgs args)
@@ -1409,11 +1737,12 @@ namespace Microsoft.AspNetCore.Components.Test
             private readonly List<RenderHandle> _renderHandles
                 = new List<RenderHandle>();
 
-            public void Init(RenderHandle renderHandle)
+            public void Configure(RenderHandle renderHandle)
                 => _renderHandles.Add(renderHandle);
 
-            public void SetParameters(ParameterCollection parameters)
+            public Task SetParametersAsync(ParameterCollection parameters)
             {
+                return Task.CompletedTask;
             }
 
             public void TriggerRender()
@@ -1463,9 +1792,10 @@ namespace Microsoft.AspNetCore.Components.Test
                 OnAfterRenderCallCount++;
             }
 
-            void IComponent.SetParameters(ParameterCollection parameters)
+            Task IComponent.SetParametersAsync(ParameterCollection parameters)
             {
                 TriggerRender();
+                return Task.CompletedTask;
             }
 
             protected override void BuildRenderTree(RenderTreeBuilder builder)
