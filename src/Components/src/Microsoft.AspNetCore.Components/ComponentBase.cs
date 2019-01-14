@@ -174,12 +174,12 @@ namespace Microsoft.AspNetCore.Components
         /// Method invoked to apply initial or updated parameters to the component.
         /// </summary>
         /// <param name="parameters">The parameters to apply.</param>
-        public virtual async Task SetParametersAsync(ParameterCollection parameters)
+        public virtual Task SetParametersAsync(ParameterCollection parameters)
         {
             parameters.SetParameterProperties(this);
             if (!_hasCalledInit)
             {
-                await InitialRun();
+                return RunInitAndSetParameters();
             }
             else
             {
@@ -195,12 +195,14 @@ namespace Microsoft.AspNetCore.Components
                 // we trigger another render.
                 if (isAsync)
                 {
-                    await parametersTask;
+                    return parametersTask;
                 }
+
+                return Task.CompletedTask;
             }
         }
 
-        private async Task InitialRun()
+        private async Task RunInitAndSetParameters()
         {
             _hasCalledInit = true;
             var initIsAsync = false;
