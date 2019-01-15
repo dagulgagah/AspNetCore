@@ -1,6 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.Net.Http;
+using BasicWebSite.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -8,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BasicWebSite
 {
@@ -48,6 +52,16 @@ namespace BasicWebSite
             services.AddTransient<ServiceActionFilter>();
             services.AddScoped<TestResponseGenerator>();
             services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
+            services.TryAddSingleton(CreateWeatherForecastService());
+        }
+
+        private WeatherForecastService CreateWeatherForecastService()
+        {
+            // For manual debug only,
+            // This needs to be changed to match the site host
+            var client = new HttpClient();
+            client.BaseAddress = new Uri("http://localhost:51733/");
+            return new WeatherForecastService(client);
         }
 
         public void Configure(IApplicationBuilder app)
