@@ -199,10 +199,10 @@ namespace Microsoft.AspNetCore.Components
         }
 
         /// <summary>
-        /// 
+        /// Creates a new <see cref="ParameterCollection"/> from the given <see cref="IDictionary{TKey, TValue}"/>.
         /// </summary>
-        /// <param name="parameters"></param>
-        /// <returns></returns>
+        /// <param name="parameters">The <see cref="IDictionary{TKey, TValue}"/> with the parameters.</param>
+        /// <returns>A <see cref="ParameterCollection"/>.</returns>
         public static ParameterCollection FromDictionary(Dictionary<string, object> parameters)
         {
             var frames = new RenderTreeFrame[parameters.Count + 1];
