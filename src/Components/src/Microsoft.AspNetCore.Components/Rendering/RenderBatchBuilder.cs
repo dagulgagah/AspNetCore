@@ -1,7 +1,6 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Components.RenderTree;
 
@@ -25,7 +24,7 @@ namespace Microsoft.AspNetCore.Components.Rendering
         public ArrayBuilder<RenderTreeFrame> ReferenceFramesBuffer { get; } = new ArrayBuilder<RenderTreeFrame>();
 
         // State of render pipeline
-        public ConcurrentQueue<RenderQueueEntry> ComponentRenderQueue { get; private set; } = new ConcurrentQueue<RenderQueueEntry>();
+        public Queue<RenderQueueEntry> ComponentRenderQueue { get; } = new Queue<RenderQueueEntry>();
         public Queue<int> ComponentDisposalQueue { get; } = new Queue<int>();
 
         // Scratch data structure for understanding attribute diffs.
@@ -35,7 +34,7 @@ namespace Microsoft.AspNetCore.Components.Rendering
         {
             EditsBuffer.Clear();
             ReferenceFramesBuffer.Clear();
-            ComponentRenderQueue = new ConcurrentQueue<RenderQueueEntry>();
+            ComponentRenderQueue.Clear();
             UpdatedComponentDiffs.Clear();
             DisposedComponentIds.Clear();
             DisposedEventHandlerIds.Clear();
