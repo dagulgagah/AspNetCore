@@ -348,10 +348,8 @@ namespace Microsoft.AspNetCore.Components.Rendering
                 // Process render queue until empty
                 while (_batchBuilder.ComponentRenderQueue.Count > 0)
                 {
-                    if (_batchBuilder.ComponentRenderQueue.TryDequeue(out var nextToRender))
-                    {
-                        RenderInExistingBatch(nextToRender);
-                    };
+                    var nextToRender = _batchBuilder.ComponentRenderQueue.Dequeue();
+                    RenderInExistingBatch(nextToRender);
                 }
 
                 var batch = _batchBuilder.ToBatch();

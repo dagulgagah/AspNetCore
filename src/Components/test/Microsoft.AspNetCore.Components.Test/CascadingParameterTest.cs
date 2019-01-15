@@ -77,7 +77,7 @@ namespace Microsoft.AspNetCore.Components.Test
             var firstBatch = renderer.Batches.Single();
             var nestedComponent = FindComponent<CascadingParameterConsumerComponent<string>>(firstBatch, out var nestedComponentId);
             Assert.Equal(1, nestedComponent.NumRenders);
-            
+
             // Act 2: Render again with updated regular parameter
             regularParameterValue = "Changed value";
             component.TriggerRender();
@@ -316,10 +316,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             isFixed = true;
-            var ex = Assert.Throws<InvalidOperationException>(() =>
-            {
-                component.TriggerRender();
-            });
+            var ex = Assert.Throws<InvalidOperationException>(() => component.TriggerRender());
             Assert.Equal("The value of IsFixed cannot be changed dynamically.", ex.Message);
         }
 
@@ -344,10 +341,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             isFixed = false;
-            var ex = Assert.Throws<InvalidOperationException>(() =>
-            {
-                component.TriggerRender();
-            });
+            var ex = Assert.Throws<InvalidOperationException>(() => component.TriggerRender());
             Assert.Equal("The value of IsFixed cannot be changed dynamically.", ex.Message);
         }
 

@@ -420,7 +420,6 @@ namespace Microsoft.AspNetCore.Components.Rendering
 
             // Assert
             Assert.Equal(expectedHtml, result);
-
         }
 
         [Fact]
@@ -445,7 +444,6 @@ namespace Microsoft.AspNetCore.Components.Rendering
 
             // Assert
             Assert.Equal(expectedHtml, result);
-
         }
 
 
