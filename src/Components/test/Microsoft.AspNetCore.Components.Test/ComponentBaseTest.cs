@@ -217,7 +217,7 @@ namespace Microsoft.AspNetCore.Components.Test
             // Arrange
             var renderer = new TestRenderer();
             var component = new TestComponent() { Counter = 1 };
-            var initTask = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var initTask = new TaskCompletionSource<object>();
             component.OnInitAsyncLogic = _ => initTask.Task;
 
             // Act
@@ -231,8 +231,9 @@ namespace Microsoft.AspNetCore.Components.Test
             component.Counter = 2;
             initTask.SetCanceled();
 
-            // Component should not be rendered again
-            Assert.Single(renderer.Batches);
+            // Component should only be rendered again due to
+            // the call to StateHasChanged after SetParametersAsync
+            Assert.Equal(2,renderer.Batches.Count);
         }
 
         [Fact]

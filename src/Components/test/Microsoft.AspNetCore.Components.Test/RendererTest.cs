@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -219,7 +220,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             var componentId = renderer.AssignRootComponentId(component);
-            var log = new Queue<(int id, NestedAsyncComponent.EventType @event)>();
+            var log = new ConcurrentQueue<(int id, NestedAsyncComponent.EventType @event)>();
             await renderer.RenderRootComponentAsync(componentId, ParameterCollection.FromDictionary(new Dictionary<string, object>
             {
                 [nameof(NestedAsyncComponent.EventActions)] = new Dictionary<int, IList<NestedAsyncComponent.ExecutionAction>>
@@ -263,7 +264,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             var componentId = renderer.AssignRootComponentId(component);
-            var log = new Queue<(int id, NestedAsyncComponent.EventType @event)>();
+            var log = new ConcurrentQueue<(int id, NestedAsyncComponent.EventType @event)>();
             await renderer.RenderRootComponentAsync(componentId, ParameterCollection.FromDictionary(new Dictionary<string, object>
             {
                 [nameof(NestedAsyncComponent.EventActions)] = new Dictionary<int, IList<NestedAsyncComponent.ExecutionAction>>
@@ -307,7 +308,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             var componentId = renderer.AssignRootComponentId(component);
-            var log = new Queue<(int id, NestedAsyncComponent.EventType @event)>();
+            var log = new ConcurrentQueue<(int id, NestedAsyncComponent.EventType @event)>();
             await renderer.RenderRootComponentAsync(componentId, ParameterCollection.FromDictionary(new Dictionary<string, object>
             {
                 [nameof(NestedAsyncComponent.EventActions)] = new Dictionary<int, IList<NestedAsyncComponent.ExecutionAction>>
@@ -351,7 +352,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             // Act/Assert
             var componentId = renderer.AssignRootComponentId(component);
-            var log = new Queue<(int id, NestedAsyncComponent.EventType @event)>();
+            var log = new ConcurrentQueue<(int id, NestedAsyncComponent.EventType @event)>();
             await renderer.RenderRootComponentAsync(componentId, ParameterCollection.FromDictionary(new Dictionary<string, object>
             {
                 [nameof(NestedAsyncComponent.EventActions)] = new Dictionary<int, IList<NestedAsyncComponent.ExecutionAction>>
@@ -1864,7 +1865,7 @@ namespace Microsoft.AspNetCore.Components.Test
 
             [Parameter] public int TestId { get; set; }
 
-            [Parameter] public Queue<(int testId, EventType @event)> Log { get; set; }
+            [Parameter] public ConcurrentQueue<(int testId, EventType @event)> Log { get; set; }
 
             protected override void OnInit()
             {

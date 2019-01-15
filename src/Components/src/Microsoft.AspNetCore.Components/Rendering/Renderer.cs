@@ -24,6 +24,7 @@ namespace Microsoft.AspNetCore.Components.Rendering
         private bool _isBatchInProgress;
         private int _lastEventHandlerId = 0;
         private List<Task> _pendingTasks = new List<Task>();
+        private object _asyncWorkLock = new object();
 
         /// <summary>
         /// Constructs an instance of <see cref="Renderer"/>.
@@ -169,11 +170,15 @@ namespace Microsoft.AspNetCore.Components.Rendering
             // which might trigger further renders.
             while (_pendingTasks.Count > 0)
             {
-                // Create a Task that represents the remaining ongoing work for the rendering process
-                var pendingWork = Task.WhenAll(_pendingTasks);
+                Task pendingWork;
+                lock (_asyncWorkLock)
+                {
+                    // Create a Task that represents the remaining ongoing work for the rendering process
+                    pendingWork = Task.WhenAll(_pendingTasks);
 
-                // Clear all pending work.
-                _pendingTasks.Clear();
+                    // Clear all pending work.
+                    _pendingTasks.Clear();
+                }
 
                 // new work might be added before we check again as a result of waiting for all
                 // the child components to finish executing SetParametersAsync
@@ -286,7 +291,10 @@ namespace Microsoft.AspNetCore.Components.Rendering
                     ExceptionDispatchInfo.Capture(task.Exception.InnerException).Throw();
                     break;
                 default:
-                    _pendingTasks.Add(task);
+                    lock (_asyncWorkLock)
+                    {
+                        _pendingTasks.Add(task);
+                    }
                     break;
             }
         }
@@ -319,8 +327,11 @@ namespace Microsoft.AspNetCore.Components.Rendering
                 return;
             }
 
-            _batchBuilder.ComponentRenderQueue.Enqueue(
-                new RenderQueueEntry(componentState, renderFragment));
+            lock (_asyncWorkLock)
+            {
+                _batchBuilder.ComponentRenderQueue.Enqueue(
+                    new RenderQueueEntry(componentState, renderFragment));
+            }
 
             if (!_isBatchInProgress)
             {
@@ -346,9 +357,8 @@ namespace Microsoft.AspNetCore.Components.Rendering
             try
             {
                 // Process render queue until empty
-                while (_batchBuilder.ComponentRenderQueue.Count > 0)
+                while (TryGetRenderQueueEntry(out var nextToRender))
                 {
-                    var nextToRender = _batchBuilder.ComponentRenderQueue.Dequeue();
                     RenderInExistingBatch(nextToRender);
                 }
 
@@ -361,6 +371,23 @@ namespace Microsoft.AspNetCore.Components.Rendering
                 RemoveEventHandlerIds(_batchBuilder.DisposedEventHandlerIds.ToRange(), updateDisplayTask);
                 _batchBuilder.Clear();
                 _isBatchInProgress = false;
+            }
+        }
+
+        private bool TryGetRenderQueueEntry(out RenderQueueEntry entry)
+        {
+            lock (_asyncWorkLock)
+            {
+                if (_batchBuilder.ComponentRenderQueue.Count > 0)
+                {
+                    entry = _batchBuilder.ComponentRenderQueue.Dequeue();
+                    return true;
+                }
+                else
+                {
+                    entry = default;
+                    return false;
+                }
             }
         }
 
